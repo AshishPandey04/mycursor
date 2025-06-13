@@ -11,8 +11,10 @@
   "license": "ISC",
   "dependencies": {
     "@google/genai": "^1.5.0",
+    "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "dotenv": "^16.5.0",
-    "genai": "^0.0.18"
+    "genai": "^0.0.18",
+    "nodemon": "^3.1.10"
   }
 }
