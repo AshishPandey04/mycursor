@@ -1,6 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
+import 'dotenv/config';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENAI_API_KEY });
+
+const ai = new GoogleGenAI({ apiKey: String( process.env.GOOGLE_GENAI_API_KEY) });
 function sum(x,y){
     return x+y;
 }
