@@ -1,15 +1,34 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import "dotenv/config";
+import {exec} from 'node:child_process'
 
 // 1. Initialize the Google AI client
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY);
 
-// This function is just a placeholder for your actual tool
 function getweather(city) {
-  return "43";
+  return `${city} has 43 degree C`;
 }
 
-// The SYSTEM_PROMPT remains the same and guides the AI's behavior.
+async function executeCommand(command){
+  console.log("👉 Running command:", command); // Add this line
+
+  return new Promise((resolve, reject) => {
+    exec(command, function(err, stdout, stderr){
+      if (err) {
+        return reject(err);
+      }
+      resolve(`stdout: ${stdout}\nstderr: ${stderr}`);
+    });
+  });
+}
+
+const TOOLS_MAP = {
+  getweather: getweather,
+  executeCommand:executeCommand,
+};
+
+
+
 const SYSTEM_PROMPT = `
  You are a helpful AI Assistant who is designed to resolve user query.
  you work on START,THINK , ACTION , OBSERVE AND OUTPUT mode.
@@ -29,6 +48,7 @@ const SYSTEM_PROMPT = `
 
  Available tools are:
  -getweather(city): which takes a city name and returns the weather in that city.
+ -executeCommand(command): string, Executes a given linux command on user's device and returns the STDOUT and STDERR
 
  Example:
  START: what is weather in Jaipur?
@@ -40,20 +60,30 @@ const SYSTEM_PROMPT = `
  OUTPUT: The weather in Jaipur is 43 degrees,which is quite hot.
 
 Output Example:
-{"role":"user","parts":[{"text":"what is weather in Jaipur?"}]}
-{"step":"think","parts":[{"text":"user is asking for the weather in a jaipur city."}]}
-{"step":"think","parts":[{"text":"From the available tools , I must call getweather(city) tool."}]}
+{"role":"user","parts":[{"content":"what is weather in Jaipur?"}]}
+{"step":"think","parts":[{"content":"user is asking for the weather in a jaipur city."}]}
+{"step":"think","parts":[{"content":"From the available tools , I must call getweather(city) tool."}]}
 {"step":"action","tool":"getweather","input":"jaipur"}
-{"step":"observe","text":"43 Degrees"}
-{"step":"think","parts":[{"text":"the output of getWeather for jaipur is 43 degrees."}]}
-{"step":"output","text":"The weather in Jaipur is 43 degrees, which is quite hot."}
+{"step":"observe","content":"43 Degrees"}
+{"step":"think","parts":[{"content":"the output of getWeather for jaipur is 43 degrees."}]}
+{"step":"output","content":"The weather in Jaipur is 43 degrees, which is quite hot."}
 
 Output Format:
-{"step":"String", "tool":"string", "input":"string", "text":"string"}
+{"step":"String", "tool":"string", "input":"string", "content":"string"}
+
+
+Note: You are running commands on a Windows machine. Use Windows-compatible shell commands (e.g., mkdir, echo with double quotes, .bat syntax). Avoid using Linux commands like 'touch' or 'rm'. You can use echo for html.
+
 `;
 
 async function main() {
-  // 2. Get the generative model, providing the system prompt and response format here.
+  const messages = [];
+
+  const userQuery = "create a folder todo app and create a todo app with HTML CSS and JS fully working";
+  messages.push({
+    role: "user",
+    parts: [{ text: userQuery }],
+  });
   const model = genAI.getGenerativeModel({
     model: "gemini-1.5-flash",
     systemInstruction: SYSTEM_PROMPT,
@@ -62,34 +92,52 @@ async function main() {
     },
   });
 
-  // 3. Start a new chat session, providing the initial user message in the history.
-  const chat = model.startChat({
-    history: [
-      // The history should only contain user and model turns, not the system prompt.
-      {
-        role: "user",
-        parts: [{ text: "hey !!" }],
-      },
-      {
+  while (true) {
+    const chat = model.startChat({
+      history: messages,
+    });
+
+    const lastMessage = messages[messages.length - 1].parts[0].text;
+    const result = await chat.sendMessage(lastMessage);
+
+   if (!result || !result.response || typeof result.response.text !== 'function') {
+  console.error("❌ Unexpected structure in Gemini response:", result);
+  return;
+}
+
+    const text = result.response.text();
+
+    messages.push({
+      role: "model",
+      parts: [{ text }],
+    });
+
+    const parsed_response = JSON.parse(text);
+
+   if (parsed_response.step && parsed_response.step === "think") {
+  const thinkContent = parsed_response.parts?.[0]?.content || "No content";
+  console.log(`🧠: ${thinkContent}`);
+  continue;
+}
+    if (parsed_response.step && parsed_response.step === "output") {
+      console.log(`🤖: ${parsed_response.content}`);
+      break;
+    }
+    if (parsed_response.step && parsed_response.step === "action") {
+      const tool = parsed_response.tool;
+      const input = parsed_response.input;
+
+      const value =await TOOLS_MAP[tool](input);
+
+           console.log(`⚒️: Tool call ${tool}("${input}") => ${value}`);
+
+      messages.push({
         role: "model",
-        parts: [{ text: "hello how r u doing" }],
-      },
-    ],
-  });
-
-  // console.log("Chat session started with initial history.");
-
-  // From here, you would continue the conversation by using chat.sendMessage()
-
-
-  const message = {
-"step": "think", "parts": [{"text": "The observe step provides the current weather in Jaipur as 77°F and sunny.  I can now formulate a response."}]
-};
-
-const response = await chat.sendMessage(JSON.stringify(message));
-
-  console.log(response.response.text());
-   
+        parts: [{ text: JSON.stringify({ step: "observe", content: value }) }],
+      });
+      continue;
+    }
+  }
 }
 
 main();
