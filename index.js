@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: "AIzaSyDVHLlC_qX7w5krjkzaQkYx8kWyqQTjzB8" });
+const ai = new GoogleGenAI({ apiKey: "" });
 function sum(x,y){
     return x+y;
 }
@@ -34,5 +34,8 @@ async function main() {
   console.log( response1.text);
 
 }
+
+
+
 
 await main();
